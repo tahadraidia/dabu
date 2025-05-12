@@ -1,0 +1,6 @@
+py/**/*.pyd
+py/**/*.obj
+py/**/*.exp
+py/**/*.lib
+py/*.egg-info/*
+py/dist/*
