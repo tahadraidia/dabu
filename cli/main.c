@@ -19,6 +19,7 @@ main(int argc, char *argv[])
 		assembly_T *list = NULL;
 		block_T *block = NULL;
 		size_t count = assemblies_dump(&block, file, &list, false);
+		block_free(&block);
     }
 
     return 0;

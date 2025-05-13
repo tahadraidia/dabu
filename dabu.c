@@ -380,7 +380,7 @@ assemblies_dump(
 
     if (header.magic != XABA_MAGIC)
     {
-        fprintf(stderr, "This is not a AssemblyStore File\n");
+        fprintf(stderr, "%s is not a AssemblyStore File\n", path);
 		goto EXIT;
     }
 
