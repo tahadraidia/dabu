@@ -7,17 +7,19 @@
 
 #include "lz4.h"
 
+#include "dabu.h"
+
 typedef struct {
     uint8_t *buffer;
     size_t cap;
     size_t size;
 } string_T;
 
-typedef struct {
+struct block_T {
     uint8_t *buffer;
     size_t size;
     size_t offset;
-} block_T;
+};
 
 block_T*
 block_create(const size_t size)
@@ -117,7 +119,6 @@ string_concat(block_T *block, const char *text, const char *extra)
     return ptr;
 }
 
-
 #define XABA_MAGIC 0x41424158
 #define XALZ_MAGIC 0x5a4c4158
 
@@ -162,6 +163,39 @@ typedef struct {
 } xalz_T;
 #pragma pack(pop)
 
+void
+list_init(block_T **block, assembly_T **list, const size_t size)
+{
+    *list = block_alloc(*block, size);
+    (*list)->next = NULL;
+}
+
+void
+list_append(
+	block_T **block,
+	assembly_T **list,
+	const char *name,
+	const size_t size)
+{
+    assembly_T *iter = *list;
+
+    while (iter && iter->next)
+        iter = iter->next;
+
+    assembly_T *new_node = block_alloc(*block, sizeof(assembly_T));
+    if (!new_node)
+        return;
+
+    new_node->next = NULL;
+    memcpy(new_node->name, name, MAX_NAME);
+    new_node->size = size;
+
+    if (iter)
+        iter->next = new_node;
+    else
+        *list = new_node;
+}
+
 int
 read_header(const FILE *file, header_T *header)
 {
@@ -185,7 +219,7 @@ read_header(const FILE *file, header_T *header)
 }
 
 hash_T*
-get_hash(hash_T *list, size_t size, const uint32_t index)
+get_hash(hash_T *list, const size_t size, const size_t index)
 {
     if (!list
             || size < 0
@@ -299,7 +333,7 @@ get_dllname_from_manifest(block_T *block, const FILE* file, const uint64_t hash)
 	return NULL;
 }
 
-int
+size_t
 write_file(const char *filename, uint8_t *data, size_t size)
 {
     if (!filename || !data || size <= 0) return -1;
@@ -307,28 +341,32 @@ write_file(const char *filename, uint8_t *data, size_t size)
 
     if (!file) return -1;
 
-    int ret = fwrite(data, sizeof(uint8_t), size, file);
+    size_t ret = fwrite(data, sizeof(uint8_t), size, file);
 
     fclose(file);
 
     return ret;
 }
 
-bool
-assemblies_dump(const char *path, const bool dump)
+size_t
+assemblies_dump(
+	block_T **block,
+	const char *path,
+	assembly_T **list,
+	const bool dump)
 {
     if (path == NULL)
-        return false;
+        return 0;
 
     FILE *file = fopen(path, "rb");
 
     if (file == NULL)
     {
         fprintf(stderr, "Failed opening assemblies blob file\n");
-		return false;
+		return 0;
     }
 
-	bool ret = true;
+	size_t count = 0;
 
     header_T header = { 0 };
 
@@ -337,54 +375,50 @@ assemblies_dump(const char *path, const bool dump)
     if (r < 0)
     {
         fprintf(stderr, "Failed reading file\n");
-		ret = false;
 		goto EXIT;
     }
 
     if (header.magic != XABA_MAGIC)
     {
         fprintf(stderr, "This is not a AssemblyStore File\n");
-		ret = false;
 		goto EXIT;
     }
 
     if (header.magic != XABA_MAGIC)
     {
         fprintf(stderr, "This is not a AssemblyStore File\n");
-		ret = false;
 		goto EXIT;
     }
 
     assert(header.entry_count > 0);
 
     //TODO improve mem allocation calculation
-    block_T *block = block_create(header.entry_count * (1024 * 1024));
+    *block = block_create((header.entry_count * (1024 * 1024)) + (sizeof(assembly_T) * header.entry_count));
 
     if (!block)
     {
         fprintf(stderr, "block_create() failed\n");
-		ret = false;
 		goto EXIT;
     }
 
     assert(header.entry_count > 0);
 
-    const char *manifest_path = change_file_ext(block, path, ".manifest");
+    list_init(block, list, sizeof(assembly_T));
+
+    const char *manifest_path = change_file_ext(*block, path, ".manifest");
 
     FILE *manifest = fopen(manifest_path, "r");
     if (manifest == NULL)
     {
         fprintf(stderr, "Failed opening manifest file\n");
-		ret = false;
 		goto EXIT;
     }
 
-    descriptor_T* descriptors = block_alloc(block, header.entry_count * sizeof(descriptor_T));
+    descriptor_T* descriptors = block_alloc(*block, header.entry_count * sizeof(descriptor_T));
 
     if (!descriptors)
     {
         fprintf(stderr, "malloc failed");
-		ret = false;
 		goto EXIT;
     }
 
@@ -400,17 +434,16 @@ assemblies_dump(const char *path, const bool dump)
                 file) != 1)
         {
             fprintf(stderr, "Failed reading file\n");
-			ret = false;
             goto EXIT;
         }
     }
 
     size_t fpos = ftell(file);
 
-    size_t count = header.index_entry_count;
+    count = header.index_entry_count;
     assert(count > 0);
 
-    hash_T *hash32list =  block_alloc(block, sizeof(hash_T) * count);
+    hash_T *hash32list =  block_alloc(*block, sizeof(hash_T) * count);
 
     for (size_t i = 0; i < header.index_entry_count; i++)
     {
@@ -421,12 +454,11 @@ assemblies_dump(const char *path, const bool dump)
                 file) != 1)
         {
             fprintf(stderr, "Failed reading file\n");
-			ret = false;
             goto EXIT;
         }
     }
 
-    hash_T *hash64list =  block_alloc(block, sizeof(hash_T) * count);
+    hash_T *hash64list =  block_alloc(*block, sizeof(hash_T) * count);
 
     for (size_t i = 0; i < header.index_entry_count; i++)
     {
@@ -437,7 +469,6 @@ assemblies_dump(const char *path, const bool dump)
                 file) != 1)
         {
             fprintf(stderr, "Failed reading file\n");
-			ret = false;
             goto EXIT;
         }
     }
@@ -448,7 +479,7 @@ assemblies_dump(const char *path, const bool dump)
     {
         hash_T* hash = get_hash(hash32list, count, i);
         descriptor_T* dsc = get_descriptor(descriptors, count, hash->local_store_index);
-		const char* dllname = get_dllname_from_manifest(block, manifest, hash->hash32);
+		const char* dllname = get_dllname_from_manifest(*block, manifest, hash->hash32);
 
         fseek((FILE*)file, dsc->data_offset, SEEK_SET);
         fpos = ftell(file);
@@ -461,7 +492,6 @@ assemblies_dump(const char *path, const bool dump)
                 file) != 1)
         {
             fprintf(stderr, "Failed reading file\n");
-			ret = false;
             goto EXIT;
         }
 
@@ -470,12 +500,13 @@ assemblies_dump(const char *path, const bool dump)
 		assert(xalz.magic == 0x5a4c4158);
         assert(xalz.size > 0);
 
+        list_append(block, list, dllname, xalz.size);
+
         size_t compressed_file_size = dsc->data_size;
-        uint8_t* compressed_payload = block_alloc(block, compressed_file_size);
+        uint8_t* compressed_payload = block_alloc(*block, compressed_file_size);
         if (!compressed_payload)
         {
             fprintf(stderr, "malloc failed\n");
-			ret = false;
             goto EXIT;
         }
 
@@ -488,35 +519,31 @@ assemblies_dump(const char *path, const bool dump)
 			if(!feof(file))
 			{
             	fprintf(stderr, "Failed reading file 2\n");
-				ret = false;
             	goto EXIT;
 			}
         }
 
         size_t data_size = xalz.size;
-        uint8_t *data = block_alloc(block, data_size);
+        uint8_t *data = block_alloc(*block, data_size);
         if (!data)
         {
             fprintf(stderr, "malloc failed\n");
-			ret = false;
             goto EXIT;
         }
 
-        int ret =  LZ4_decompress_fast(compressed_payload, data, data_size);
+        size_t ret =  LZ4_decompress_fast(compressed_payload, data, (int)data_size);
         if (ret <= 0)
         {
             fprintf(stderr, "LZ4 decompression failed\n");
-			ret = false;
             goto EXIT;
         }
 
-        const char *dir = get_parent_dir(block, path);
-        string_T *output = (dir) ? string_concat(block, dir, dllname) : string_new(block, dllname);
+        const char *dir = get_parent_dir(*block, path);
+        string_T *output = (dir) ? string_concat(*block, dir, dllname) : string_new(*block, dllname);
 
         if (!output)
         {
             fprintf(stderr, "string operation failed\n");
-			ret = false;
             goto EXIT;
         }
 
@@ -526,7 +553,6 @@ assemblies_dump(const char *path, const bool dump)
             if (ret <= 0)
             {
                 fprintf(stderr, "write_file() failed\n");
-				ret = false;
                 goto EXIT;
             }
         }
@@ -540,8 +566,6 @@ EXIT:
     if (manifest)
         fclose(manifest);
 
-    block_free(&block);
-
-	return ret;
+	return count;
 }
 
