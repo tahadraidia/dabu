@@ -358,7 +358,10 @@ assemblies_dump(
     if (path == NULL)
         return 0;
 
-    FILE *file = fopen(path, "rb");
+    FILE *file = NULL;
+    FILE *manifest = NULL;
+
+    file = fopen(path, "rb");
 
     if (file == NULL)
     {
@@ -407,7 +410,7 @@ assemblies_dump(
 
     const char *manifest_path = change_file_ext(*block, path, ".manifest");
 
-    FILE *manifest = fopen(manifest_path, "r");
+    manifest = fopen(manifest_path, "r");
     if (manifest == NULL)
     {
         fprintf(stderr, "Failed opening manifest file\n");
@@ -561,10 +564,16 @@ assemblies_dump(
 
 EXIT:
     if (file)
+    {
         fclose(file);
+        file = NULL;
+    }
 
     if (manifest)
+    {
         fclose(manifest);
+        manifest = NULL;
+    }
 
 	return count;
 }
