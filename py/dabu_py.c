@@ -23,29 +23,53 @@ static PyObject* dabu_dump(PyObject* self, PyObject* args) {
     if (!assembly_list || count == 0)
         return PyList_New(0);
 
-    PyObject *list = PyList_New(count);
+    PyObject *list = PyList_New(0);
 
     if (!list)
         return PyList_New(0);
 
     assembly_T *iter = assembly_list;
 
-    size_t i = 0;
-
-    while (iter  && i < count)
+    while (iter)
     {
         PyObject *dict = PyDict_New();
         if (!dict)
         {
+            Py_XDECREF(list);
+            return PyList_New(0);
+        }
+
+        if (!iter->name || !iter->size)
+        {
+            iter = iter->next;
+        }
+
+        PyObject *name = PyUnicode_FromString(iter->name);
+        PyObject *size = PyLong_FromLong(iter->size);
+        if (!name || !size)
+        {
+            Py_XDECREF(name);
+            Py_XDECREF(size);
+            Py_DECREF(dict);
+            return PyList_New(0);
+        }
+
+        PyDict_SetItemString(dict, "name", name);
+        PyDict_SetItemString(dict, "size", size);
+
+        Py_DECREF(name);
+        Py_DECREF(size);
+
+        if (PyList_Append(list, dict) < 0)
+        {
+            Py_DECREF(dict);
             Py_DECREF(list);
             return PyList_New(0);
         }
 
-        PyDict_SetItemString(dict, "name", PyUnicode_FromString(iter->name));
-        PyDict_SetItemString(dict, "size", PyLong_FromLong(iter->size));
-        PyList_SetItem(list, i, dict);
+        Py_DECREF(dict);
+
         iter = iter->next;
-        i++;
     }
 
     block_free(&block);
