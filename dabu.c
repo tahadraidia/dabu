@@ -9,6 +9,9 @@
 
 #include "dabu.h"
 
+#define debug_env "dabu_debug"
+#define is_debug (getenv(debug_env) != NULL)
+
 typedef struct {
     uint8_t *buffer;
     size_t cap;
@@ -425,8 +428,11 @@ assemblies_dump(
 		goto EXIT;
     }
 
-    fprintf(stdout, "magic: 0x%X, version: 0x%u, entries: %u, index_entries: %u, index_size: %u \n",
-            header.magic, header.version, header.entry_count, header.index_entry_count, header.index_size);
+    if (is_debug)
+    {
+        fprintf(stdout, "magic: 0x%X, version: 0x%u, entries: %u, index_entries: %u, index_size: %u \n",
+                header.magic, header.version, header.entry_count, header.index_entry_count, header.index_size);
+    }
 
     for (size_t i = 0; i < header.entry_count; i++)
     {
@@ -498,8 +504,12 @@ assemblies_dump(
             goto EXIT;
         }
 
-		fprintf(stdout, "file: %s pos: 0x%zx index: %ld magic: 0x%lx xalz.size: 0x%lx data_offset: 0x%lx data_size: %ld\n",
-                dllname, fpos, hash->local_store_index, xalz.magic, xalz.size, dsc->data_offset, dsc->data_size);
+        if (is_debug)
+        {
+            fprintf(stdout, "file: %s pos: 0x%zx index: %ld magic: 0x%lx xalz.size: 0x%lx data_offset: 0x%lx data_size: %ld\n",
+                    dllname, fpos, hash->local_store_index, xalz.magic, xalz.size, dsc->data_offset, dsc->data_size);
+        }
+
 		assert(xalz.magic == 0x5a4c4158);
         assert(xalz.size > 0);
 
