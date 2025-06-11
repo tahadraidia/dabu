@@ -22,4 +22,7 @@ assemblies_fetch(const char*, assembly_T**);
 size_t
 assemblies_dump(block_T **, const char *, assembly_T **, const bool);
 
+void
+block_free(block_T **block);
+
 #endif

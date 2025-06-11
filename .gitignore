@@ -4,3 +4,10 @@ py/**/*.exp
 py/**/*.lib
 py/*.egg-info/*
 py/dist/*
+cli/**/*.obj
+cli/**/*.exp
+cli/**/*.pdb
+cli/**/*.ilk
+cli/**/*.exe
+cli/build
+
