@@ -8,7 +8,7 @@
 int
 help(const char* prog)
 {
-    fprintf(stderr, "%s <assemblie.blob>", prog);
+    fprintf(stderr, "%s <blob file>\n", prog);
     return -1;
 }
 
@@ -25,19 +25,22 @@ main(int argc, char *argv[])
 
     if (file && (strlen(file) > 1))
     {
-		assembly_T *list = NULL;
-		block_T *block = NULL;
-		size_t count = assemblies_dump(&block, file, &list, false);
-        if (list && count > 0)
-        {
-            assembly_T *iter = list;
-            while (iter)
-            {
-                if (iter->name) printf("%s\n", iter->name);
-                iter = iter->next;
-            }
-        }
-		block_free(&block);
+	    assembly_T *list = NULL;
+	    block_T *block = NULL;
+
+	    size_t count = assemblies_dump(&block, file, &list, false);
+
+	    if (list && count > 0)
+	    {
+		    assembly_T *iter = list;
+		    while (iter)
+		    {
+			    if (iter->name[0]) printf("%s\n", iter->name);
+			    iter = iter->next;
+		    }
+	    }
+
+	    block_free(&block);
     }
 
     return 0;

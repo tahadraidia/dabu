@@ -39,7 +39,7 @@ static PyObject* dabu_dump(PyObject* self, PyObject* args) {
             return PyList_New(0);
         }
 
-        if (!iter->name || !iter->size)
+        if (iter->name[0] != '\0' || !iter->size)
         {
             iter = iter->next;
         }

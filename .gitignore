@@ -4,10 +4,12 @@ py/**/*.exp
 py/**/*.lib
 py/*.egg-info/*
 py/dist/*
+py/build/*
 cli/**/*.obj
 cli/**/*.exp
 cli/**/*.pdb
 cli/**/*.ilk
 cli/**/*.exe
 cli/build
-
+!cli/fuzz/sc/*.png
+samples/*

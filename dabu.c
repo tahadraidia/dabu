@@ -74,7 +74,7 @@ block_alloc(block_T *block, const size_t size)
 {
     if ((block->offset + size) > block->size)
     {
-        fprintf(stderr, "block_T out of memory!");
+        fprintf(stderr,"block_T out of memory! current block size: 0x%lx requested size: 0x%lx\n", block->size, size);
         return NULL;
     }
 
@@ -92,7 +92,11 @@ string_new(block_T *block, const char *text)
     const size_t cap = len * sizeof(uint8_t);
     string_T *ptr = block_alloc(block, sizeof(string_T));
 
-    assert(ptr);
+    if (!ptr)
+    {
+	    fprintf(stderr, "block_alloc() failed - file:%s:%d\n", __FILE__, __LINE__);
+	    return NULL;
+    }
 
     ptr->buffer = block_alloc(block, cap);
     memcpy(ptr->buffer, text, cap);
@@ -111,7 +115,11 @@ string_concat(block_T *block, const char *text, const char *extra)
     const size_t cap = len * sizeof(uint8_t);
     string_T *ptr = block_alloc(block, sizeof(string_T));
 
-    assert(ptr);
+    if (!ptr)
+    {
+	    fprintf(stderr, "block_alloc() failed - file:%s:%d\n", __FILE__, __LINE__);
+	    return NULL;
+    }
 
     ptr->buffer = block_alloc(block, cap);
     strncpy(ptr->buffer, text, text_len);
@@ -170,7 +178,7 @@ void
 list_init(block_T **block, assembly_T **list, const size_t size)
 {
     *list = block_alloc(*block, size);
-    (*list)->next = NULL;
+    if (list && *list) (*list)->next = NULL;
 }
 
 void
@@ -214,7 +222,7 @@ read_header(const FILE *file, header_T *header)
             1,
             (FILE*)file) != 1)
     {
-        fprintf(stderr, "Failed reading file\n");
+        fprintf(stderr, "fread() failed fie:%s:%d\n", __FILE__, __LINE__);
         return -1;
     }
 
@@ -249,7 +257,10 @@ const char*
 change_file_ext(block_T *block, const char* path, const char* ext)
 {
     if (!path || !ext) return NULL;
+
     const char* last_token = strrchr(path, '.');
+    if (!last_token) return NULL;
+
     size_t ext_len = strlen(ext);
     if ((char)last_token[1] != 0x62) return NULL;
 
@@ -363,6 +374,7 @@ assemblies_dump(
 
     FILE *file = NULL;
     FILE *manifest = NULL;
+    bool has_manifest = true;
 
     file = fopen(path, "rb");
 
@@ -396,7 +408,11 @@ assemblies_dump(
 		goto EXIT;
     }
 
-    assert(header.entry_count > 0);
+    if(header.entry_count <= 0)
+    {
+        fprintf(stderr, "received a non-valid entry count\n");
+		goto EXIT;
+    }
 
     //TODO improve mem allocation calculation
     *block = block_create((header.entry_count * (1024 * 1024)) + (sizeof(assembly_T) * header.entry_count));
@@ -407,7 +423,7 @@ assemblies_dump(
 		goto EXIT;
     }
 
-    assert(header.entry_count > 0);
+    //assert(header.entry_count > 0);
 
     list_init(block, list, sizeof(assembly_T));
 
@@ -417,15 +433,14 @@ assemblies_dump(
     if (manifest == NULL)
     {
         fprintf(stderr, "Failed opening manifest file\n");
-		goto EXIT;
+	has_manifest = false;
     }
 
     descriptor_T* descriptors = block_alloc(*block, header.entry_count * sizeof(descriptor_T));
-
     if (!descriptors)
     {
-        fprintf(stderr, "malloc failed");
-		goto EXIT;
+        fprintf(stderr, "block_alloc() failed: %s:%d\n", __FILE__, __LINE__);
+	goto EXIT;
     }
 
     if (is_debug)
@@ -442,7 +457,7 @@ assemblies_dump(
                 1,
                 file) != 1)
         {
-            fprintf(stderr, "Failed reading file\n");
+            fprintf(stderr, "fread() failed fie:%s:%d\n", __FILE__, __LINE__);
             goto EXIT;
         }
     }
@@ -450,9 +465,18 @@ assemblies_dump(
     size_t fpos = ftell(file);
 
     count = header.index_entry_count;
-    assert(count > 0);
+    if (count <= 0)
+    {
+        fprintf(stderr, "received a non-valid index entry count\n");
+		goto EXIT;
+    }
 
     hash_T *hash32list =  block_alloc(*block, sizeof(hash_T) * count);
+    if(hash32list == NULL)
+    {
+	    fprintf(stderr, "block_alloc() failed file:%s:%d\n", __FILE__, __LINE__);
+            goto EXIT;
+    }
 
     for (size_t i = 0; i < header.index_entry_count; i++)
     {
@@ -462,12 +486,17 @@ assemblies_dump(
                 1,
                 file) != 1)
         {
-            fprintf(stderr, "Failed reading file\n");
+            fprintf(stderr, "fread() failed fie:%s:%d\n", __FILE__, __LINE__);
             goto EXIT;
         }
     }
 
     hash_T *hash64list =  block_alloc(*block, sizeof(hash_T) * count);
+    if(hash64list == NULL)
+    {
+	    fprintf(stderr, "block_alloc() failed file:%s:%d\n", __FILE__, __LINE__);
+            goto EXIT;
+    }
 
     for (size_t i = 0; i < header.index_entry_count; i++)
     {
@@ -477,7 +506,7 @@ assemblies_dump(
                 1,
                 file) != 1)
         {
-            fprintf(stderr, "Failed reading file\n");
+            fprintf(stderr, "fread() failed fie:%s:%d\n", __FILE__, __LINE__);
             goto EXIT;
         }
     }
@@ -487,8 +516,26 @@ assemblies_dump(
     for (size_t i = 0; i < header.index_entry_count; i++)
     {
         hash_T* hash = get_hash(hash32list, count, i);
+	if (!hash)
+	{
+		fprintf(stderr, "Failed getting hash object for index 0x%x\n", i);
+		continue;
+	}
         descriptor_T* dsc = get_descriptor(descriptors, count, hash->local_store_index);
-		const char* dllname = get_dllname_from_manifest(*block, manifest, hash->hash32);
+	if (!dsc)
+	{
+		fprintf(stderr, "Failed getting descriptor object for local store index 0x%lx\n", hash->local_store_index);
+		continue;
+	}
+	const char* dllname = NULL;
+	char hexdllname[16] = { 0 };
+	int count = sprintf(hexdllname, "0x%lx.dll\0", hash->hash32);
+
+	if (has_manifest)
+		dllname = get_dllname_from_manifest(*block, manifest, hash->hash32);
+	else
+		dllname = &hexdllname;
+
 
         fseek((FILE*)file, dsc->data_offset, SEEK_SET);
         fpos = ftell(file);
@@ -500,8 +547,8 @@ assemblies_dump(
                 1,
                 file) != 1)
         {
-            fprintf(stderr, "Failed reading file\n");
-            goto EXIT;
+            fprintf(stderr, "fread() failed fie:%s:%d\n", __FILE__, __LINE__);
+	    continue;
         }
 
         if (is_debug)
@@ -510,8 +557,19 @@ assemblies_dump(
                     dllname, fpos, hash->local_store_index, xalz.magic, xalz.size, dsc->data_offset, dsc->data_size);
         }
 
-		assert(xalz.magic == 0x5a4c4158);
-        assert(xalz.size > 0);
+	if (xalz.magic != 0x5a4c4158)
+	{
+            fprintf(stderr, "Bailing invalid XALZ magic signature found\n");
+	    continue;
+	}
+
+        if (xalz.size <= 0)
+	{
+	    // Skip extraction of the file
+            fprintf(stderr, "Bailing invalid XALZ payload size value\n");
+	    continue;
+	}
+
 
         list_append(block, list, dllname, xalz.size);
 
@@ -519,7 +577,7 @@ assemblies_dump(
         uint8_t* compressed_payload = block_alloc(*block, compressed_file_size);
         if (!compressed_payload)
         {
-            fprintf(stderr, "malloc failed\n");
+	    fprintf(stderr, "block_alloc() failed file:%s:%d\n", __FILE__, __LINE__);
             goto EXIT;
         }
 
@@ -540,7 +598,7 @@ assemblies_dump(
         uint8_t *data = block_alloc(*block, data_size);
         if (!data)
         {
-            fprintf(stderr, "malloc failed\n");
+            fprintf(stderr, "block_alloc() failed file:%s:%d\n", __FILE__, __LINE__);
             goto EXIT;
         }
 
