@@ -369,8 +369,11 @@ assemblies_dump(
 	assembly_T **list,
 	const bool dump)
 {
-    if (path == NULL)
+    if (path == NULL || *path == NULL || strlen(path) <= 0)
+    {
+	printf("received invalid parameter\n");
         return 0;
+    }
 
     FILE *file = NULL;
     FILE *manifest = NULL;

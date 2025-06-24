@@ -5,14 +5,14 @@
 #include "../dabu.h"
 
 static PyObject* dabu_dump(PyObject* self, PyObject* args) {
-    const char* path = NULL;
-    bool dump = false;
+    const char *path = NULL;
+    int dump = 0;
 
     if (!PyArg_ParseTuple(args, "si", &path, &dump)) {
         return PyList_New(0);
     }
 
-    if (!path)
+    if (!path || !(*path) || strlen(path) <= 0)
         return PyList_New(0);
 
     block_T *block = NULL;
