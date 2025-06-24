@@ -39,11 +39,11 @@ Make sure to provide a valid assembly blob file sample in `in` directory.
 
 Several bugs mostly segfaults and asserts were found during the session, no exploitable bugs were idendified.
 
-![](cli/fuzz/sc/bugfixes_7b99dd42d268d8b1826941096e5be55348641003.png)
+![](cli/fuzz/sc/discovery_7b99dd42d268d8b1826941096e5be55348641003.png)
 
 Fixes were straighforward, following is AFL++ session post-bugfixes
 
-![](cli/fuzz/sc/discovery_7b99dd42d268d8b1826941096e5be55348641003.png)
+![](cli/fuzz/sc/bugfixes_7b99dd42d268d8b1826941096e5be55348641003.png)
 
 ### Python Build
 
