@@ -17,7 +17,7 @@ main(int argc, char *argv[])
 {
     const char *file = NULL;
 
-	//TODO: parse flag to handle dlls extraction
+    //TODO: parse flag to handle dlls extraction
     if (argc >= 2 && argv[1] && *argv[1])
         file = argv[1];
     else

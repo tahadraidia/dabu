@@ -13,12 +13,6 @@ typedef struct assembly_T {
 
 typedef struct block_T block_T;
 
-void
-list_init(block_T **, assembly_T **, const size_t);
-
-size_t
-assemblies_fetch(const char*, assembly_T**);
-
 size_t
 assemblies_dump(block_T **, const char *, assembly_T **, const bool);
 
