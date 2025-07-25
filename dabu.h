@@ -4,6 +4,7 @@
 #define MAX_NAME 1024
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct assembly_T {
     char name[MAX_NAME];

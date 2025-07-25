@@ -1,5 +1,4 @@
 #define PY_SSIZE_T_CLEAN
-#include <stdbool.h>
 #include <Python.h>
 
 #include "../dabu.h"

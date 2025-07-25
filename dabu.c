@@ -13,13 +13,13 @@
 #define is_debug (getenv(debug_env) != NULL)
 
 typedef struct {
-    uint8_t *buffer;
+    char *buffer;
     size_t cap;
     size_t size;
 } string_T;
 
 struct block_T {
-    uint8_t *buffer;
+    int8_t *buffer;
     size_t size;
     size_t offset;
 };
@@ -233,7 +233,6 @@ hash_T*
 get_hash(hash_T *list, const size_t size, const size_t index)
 {
     if (!list
-            || size < 0
             || index > size)
         return NULL;
 
@@ -245,7 +244,6 @@ descriptor_T*
 get_descriptor(descriptor_T *list, size_t size, const uint32_t index)
 {
     if (!list
-            || size < 0
             || index > size)
         return NULL;
 
@@ -301,7 +299,7 @@ get_parent_dir(block_T *block, const char* path)
     return dir;
 }
 
-const char*
+char*
 get_dllname_from_manifest(block_T *block, const FILE* file, const uint64_t hash)
 {
     uint32_t hash32 = 0;
@@ -315,12 +313,12 @@ get_dllname_from_manifest(block_T *block, const FILE* file, const uint64_t hash)
 
 	while (fgets(buf, sizeof(buf), (FILE*)file))
 	{
-		size_t ret = sscanf(buf, "0x%x  0x%llx  %d      %d      %s", &hash32, &hash64, &index, &index2, filename);
+		size_t ret = sscanf(buf, "0x%x  0x%lx  %d      %d      %s", &hash32, &hash64, &index, &index2, filename);
 		if (ret == 5)
 		{
 			if (hash32 == (uint32_t)hash || hash64 == hash)
 			{
-                if (sizeof(filename) - (strlen(filename) + 5) >= 0)
+                if ((strlen(filename) + 5) <= sizeof(filename))
                 {
                     size_t len = strlen(filename);
                     filename[len] = '.';
@@ -328,7 +326,7 @@ get_dllname_from_manifest(block_T *block, const FILE* file, const uint64_t hash)
                     filename[len+2] = 'l';
                     filename[len+3] = 'l';
                     filename[len+4] = '\0';
-                    char *underscore = strrchr(filename, '//');
+                    char *underscore = strrchr(filename, '/');
                     if (underscore) underscore[0] = '_';
                     const size_t size = strlen(filename) + 1;
                     void *ptr = block_alloc(block, size);
@@ -348,14 +346,14 @@ get_dllname_from_manifest(block_T *block, const FILE* file, const uint64_t hash)
 }
 
 size_t
-write_file(const char *filename, uint8_t *data, size_t size)
+write_file(const char *filename, char *data, size_t size)
 {
     if (!filename || !data || size <= 0) return -1;
     FILE *file = fopen(filename, "wb");
 
     if (!file) return -1;
 
-    size_t ret = fwrite(data, sizeof(uint8_t), size, file);
+    size_t ret = fwrite(data, sizeof(char), size, file);
 
     fclose(file);
 
@@ -369,7 +367,7 @@ assemblies_dump(
 	assembly_T **list,
 	const bool dump)
 {
-    if (path == NULL || *path == NULL || strlen(path) <= 0)
+    if (path == NULL || *path == '\0' || strlen(path) <= 0)
     {
 	printf("received invalid parameter\n");
         return 0;
@@ -521,23 +519,24 @@ assemblies_dump(
         hash_T* hash = get_hash(hash32list, count, i);
 	if (!hash)
 	{
-		fprintf(stderr, "Failed getting hash object for index 0x%x\n", i);
+		fprintf(stderr, "Failed getting hash object for index 0x%lx\n", i);
 		continue;
 	}
         descriptor_T* dsc = get_descriptor(descriptors, count, hash->local_store_index);
 	if (!dsc)
 	{
-		fprintf(stderr, "Failed getting descriptor object for local store index 0x%lx\n", hash->local_store_index);
+		fprintf(stderr, "Failed getting descriptor object for local store index 0x%x\n", hash->local_store_index);
 		continue;
 	}
-	const char* dllname = NULL;
+
+	char* dllname = NULL;
 	char hexdllname[16] = { 0 };
-	int count = sprintf(hexdllname, "0x%lx.dll\0", hash->hash32);
+	sprintf(hexdllname, "0x%x.dll", hash->hash32);
 
 	if (has_manifest)
 		dllname = get_dllname_from_manifest(*block, manifest, hash->hash32);
 	else
-		dllname = &hexdllname;
+		dllname = (char*)&hexdllname;
 
 
         fseek((FILE*)file, dsc->data_offset, SEEK_SET);
@@ -556,7 +555,7 @@ assemblies_dump(
 
         if (is_debug)
         {
-            fprintf(stdout, "file: %s pos: 0x%zx index: %ld magic: 0x%lx xalz.size: 0x%lx data_offset: 0x%lx data_size: %ld\n",
+            fprintf(stdout, "file: %s pos: 0x%zx index: %d magic: 0x%x xalz.size: 0x%x data_offset: 0x%x data_size: %d\n",
                     dllname, fpos, hash->local_store_index, xalz.magic, xalz.size, dsc->data_offset, dsc->data_size);
         }
 
@@ -577,7 +576,7 @@ assemblies_dump(
         list_append(block, list, dllname, xalz.size);
 
         size_t compressed_file_size = dsc->data_size;
-        uint8_t* compressed_payload = block_alloc(*block, compressed_file_size);
+        char* compressed_payload = block_alloc(*block, compressed_file_size);
         if (!compressed_payload)
         {
 	    fprintf(stderr, "block_alloc() failed file:%s:%d\n", __FILE__, __LINE__);
@@ -598,14 +597,14 @@ assemblies_dump(
         }
 
         size_t data_size = xalz.size;
-        uint8_t *data = block_alloc(*block, data_size);
+        char *data = block_alloc(*block, data_size);
         if (!data)
         {
             fprintf(stderr, "block_alloc() failed file:%s:%d\n", __FILE__, __LINE__);
             goto EXIT;
         }
 
-        size_t ret =  LZ4_decompress_fast(compressed_payload, data, (int)data_size);
+        int ret =  LZ4_decompress_fast(compressed_payload, data, (int)data_size);
         if (ret <= 0)
         {
             fprintf(stderr, "LZ4 decompression failed\n");
